@@ -1,10 +1,13 @@
 # Odo-Project
 Gstreamer based video surveillance application.
 
-This is still in the alpha stage. Currently, all that it does is play a local video file, capture the inference\
-data as a custom GstMeta object (OdoMeta), and render the results in an OSD window.
+This is still in the alpha stage. Currently, all that it does is play a local video file, capture the inference data as a\
+custom GstMeta object (OdoMeta), and render the results in an OSD window.
 
-Meson is suggested for compilation, but gcc/cmake should work also. However, this has not been tested.
+Meson is suggested for compilation, but gcc/cmake should work also. However, this has not been tested. CMakeLists.txt\
+files have been included for IDE compatibility.
+
+Gstreamer is required, and Gstreamer 1.18 or newer is suggested.
 
 OpenCV 4.0 or newer is required. Building OpenCV with CUDA is required for GPU inferencing.
 
