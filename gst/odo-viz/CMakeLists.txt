@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(gst-odo-osd CXX)
+project(gst-odo-viz CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -16,7 +16,7 @@ find_library(GLIB glib-2.0)
 message("Gstreamer package ${GSTREAMER}")
 message("Gstreamer video package ${GSTREAMER_VIDEO}")
 
-set(SOURCE_FILES gstodoosd.cpp gstodoosd.h)
+set(SOURCE_FILES gstodoviz.cpp gstodoviz.h)
 
 include_directories(.)
 
@@ -26,8 +26,8 @@ include_directories(/usr/include/glib-2.0)
 include_directories(/usr/lib/x86_64-linux-gnu/glib-2.0/include)
 include_directories(../../include)
 
-add_library(gst-odo-osd SHARED ${SOURCE_FILES})
+add_library(gst-odo-viz SHARED ${SOURCE_FILES})
 
-target_link_libraries(gst-odo-osd ${GSTREAMER} ${GSTREAMER_VIDEO} ${CUDALIB} ${GSTBASE} ${GOBJECT} ${GLIB})
-target_link_libraries(gst-odo-osd m gstrtspserver-1.0)
+target_link_libraries(gst-odo-viz ${GSTREAMER} ${GSTREAMER_VIDEO} ${CUDALIB} ${GSTBASE} ${GOBJECT} ${GLIB})
+target_link_libraries(gst-odo-viz m gstrtspserver-1.0)
 #target_link_libraries(gst-odo-detector "libOpenCV_Yolo.so")

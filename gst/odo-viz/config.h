@@ -9,11 +9,11 @@
 
 #define GST_LICENSE "LGPL"
 
-#define GST_PACKAGE_NAME "Odo-OSD Gst Plug-in"
+#define GST_PACKAGE_NAME "Odo-Viz Gst Plug-in"
 
 #define GST_PACKAGE_ORIGIN "https://github.com"
 
-#define PACKAGE "gst-odo-osd-plugin"
+#define PACKAGE "gst-odo-viz-plugin"
 
 #define PACKAGE_VERSION "1.19.0.1"
 

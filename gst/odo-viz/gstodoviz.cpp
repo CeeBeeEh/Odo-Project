@@ -44,11 +44,11 @@
 #include <string>
 #include <opencv2/opencv.hpp>
 
-#include "gstodoosd.h"
+#include "gstodoviz.h"
 #include "config.h"
 
-GST_DEBUG_CATEGORY_STATIC (gst_odo_osd_debug);
-#define GST_CAT_DEFAULT gst_odo_osd_debug
+GST_DEBUG_CATEGORY_STATIC (gst_odo_viz_debug);
+#define GST_CAT_DEFAULT gst_odo_viz_debug
 
 /* Filter signals and args */
 enum {
@@ -94,37 +94,37 @@ static GstStaticPadTemplate src_template =
                                  GST_PAD_ALWAYS,
                                  GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE ("{ BGR }")));
 
-#define gst_odo_osd_parent_class parent_class
+#define gst_odo_viz_parent_class parent_class
 
-G_DEFINE_TYPE (GstOdoOsd, gst_odo_osd, GST_TYPE_VIDEO_FILTER);
+G_DEFINE_TYPE (GstOdoViz, gst_odo_viz, GST_TYPE_VIDEO_FILTER);
 
-GST_ELEMENT_REGISTER_DEFINE (odo_osd, "odo_osd", GST_RANK_NONE, GST_TYPE_ODO_OSD);
+GST_ELEMENT_REGISTER_DEFINE (odo_viz, "odo_viz", GST_RANK_NONE, GST_TYPE_ODO_VIZ);
 
-static void gst_odo_osd_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec);
+static void gst_odo_viz_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec);
 
-static void gst_odo_osd_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec);
+static void gst_odo_viz_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec);
 
-static gboolean gst_odo_osd_start(GstBaseTransform *btrans);
+static gboolean gst_odo_viz_start(GstBaseTransform *btrans);
 
-static gboolean gst_odo_osd_stop(GstBaseTransform *btrans);
+static gboolean gst_odo_viz_stop(GstBaseTransform *btrans);
 
-static GstFlowReturn gst_odo_osd_transform_ip(GstVideoFilter *base, GstVideoFrame *outbuf);
+static GstFlowReturn gst_odo_viz_transform_ip(GstVideoFilter *base, GstVideoFrame *outbuf);
 
 /* initialize the plugin's class */
-static void gst_odo_osd_class_init(GstOdoOsdClass *klass) {
+static void gst_odo_viz_class_init(GstOdoVizClass *klass) {
     GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
     GstElementClass *gstelement_class = (GstElementClass *) klass;
     GstBaseTransformClass *gstbasetransform_class = (GstBaseTransformClass *) klass;
     GstVideoFilterClass *gstvideofilter_class = (GstVideoFilterClass *) klass;
 
-    GST_LOG_OBJECT (gstbasetransform_class, "Odo Osd Class Init");
+    GST_LOG_OBJECT (gstbasetransform_class, "Odo Viz Class Init");
 
     parent_class = g_type_class_peek_parent (klass);
 
-    gobject_class->set_property = gst_odo_osd_set_property;
-    gobject_class->get_property = gst_odo_osd_get_property;
+    gobject_class->set_property = gst_odo_viz_set_property;
+    gobject_class->get_property = gst_odo_viz_get_property;
 
-    gstbasetransform_class->start = GST_DEBUG_FUNCPTR (gst_odo_osd_start);
+    gstbasetransform_class->start = GST_DEBUG_FUNCPTR (gst_odo_viz_start);
 
     g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_WIDTH,
                                      g_param_spec_int ("width", "model width",
@@ -175,25 +175,25 @@ static void gst_odo_osd_class_init(GstOdoOsdClass *klass) {
                                                                      G_PARAM_CONSTRUCT)));
 
     gst_element_class_set_details_simple(gstelement_class,
-                                         "OdoOsd",
+                                         "OdoViz",
                                          "Object Box Display Drawing",
-                                         "Odo OSD plugin",
+                                         "Odo Visualization plugin",
                                          "Chris Blasko cblasko@gmail.com");
 
     gst_element_class_add_static_pad_template(gstelement_class, &sink_template);
     gst_element_class_add_static_pad_template(gstelement_class, &src_template);
 
     gstbasetransform_class->transform_ip_on_passthrough = FALSE;
-    gstvideofilter_class->transform_frame_ip = GST_DEBUG_FUNCPTR (gst_odo_osd_transform_ip);
+    gstvideofilter_class->transform_frame_ip = GST_DEBUG_FUNCPTR (gst_odo_viz_transform_ip);
 
     // debug category for filtering log messages
-    GST_DEBUG_CATEGORY_INIT (gst_odo_osd_debug, "odoosd", 0, "Odo OSD plugin");
+    GST_DEBUG_CATEGORY_INIT (gst_odo_viz_debug, "odoviz", 0, "Odo Viz plugin");
 }
 
 /* initialize the new element
  * initialize instance structure
  */
-static void gst_odo_osd_init(GstOdoOsd *odo) {
+static void gst_odo_viz_init(GstOdoViz *odo) {
     GstBaseTransform *base = GST_BASE_TRANSFORM (odo);
     // We will not be generating a new buffer. Just adding/updating metadata.
     gst_base_transform_set_in_place(base, TRUE);
@@ -204,8 +204,8 @@ static void gst_odo_osd_init(GstOdoOsd *odo) {
 /**
  * Initialize all resources and start the output thread
  */
-static gboolean gst_odo_osd_start(GstBaseTransform *base) {
-    GstOdoOsd *odo = GST_ODOOSD (base);
+static gboolean gst_odo_viz_start(GstBaseTransform *base) {
+    GstOdoViz *odo = GST_ODOVIZ (base);
 
     for (auto & colour : colours) {
         colour = cv::Scalar((double)std::rand() / RAND_MAX * 255,
@@ -216,8 +216,8 @@ static gboolean gst_odo_osd_start(GstBaseTransform *base) {
     return TRUE;
 }
 
-static void gst_odo_osd_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec) {
-    GstOdoOsd *filter = GST_ODOOSD(object);
+static void gst_odo_viz_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec) {
+    GstOdoViz *filter = GST_ODOVIZ(object);
 
     switch (prop_id) {
         case PROP_0:
@@ -246,8 +246,8 @@ static void gst_odo_osd_set_property(GObject *object, guint prop_id, const GValu
     }
 }
 
-static void gst_odo_osd_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec) {
-    GstOdoOsd *filter = GST_ODOOSD(object);
+static void gst_odo_viz_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec) {
+    GstOdoViz *filter = GST_ODOVIZ(object);
 
     switch (prop_id) {
         case PROP_0:
@@ -279,8 +279,8 @@ static void gst_odo_osd_get_property(GObject *object, guint prop_id, GValue *val
 /* GstVideoFilter method implementations */
 
 // this function does the actual processing
-static GstFlowReturn gst_odo_osd_transform_ip(GstVideoFilter *vfilter, GstVideoFrame *frame) {
-    GstOdoOsd *filter = GST_ODOOSD(vfilter);
+static GstFlowReturn gst_odo_viz_transform_ip(GstVideoFilter *vfilter, GstVideoFrame *frame) {
+    GstOdoViz *filter = GST_ODOVIZ(vfilter);
 
     GST_LOG_OBJECT (vfilter, "Transforming in-place");
 
@@ -366,10 +366,10 @@ void DrawRectangles(guint8 *img, gint img_width, gint img_height, GstOdoMeta *od
  * initialize the plug-in itself
  * register the element factories and other features
  */
-static gboolean plugin_init(GstPlugin *odoosd) {
-    return GST_ELEMENT_REGISTER (odo_osd, odoosd);
+static gboolean plugin_init(GstPlugin *odoviz) {
+    return GST_ELEMENT_REGISTER (odo_viz, odoviz);
 }
 
-// gstreamer looks for this structure to register plugins
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR, GST_VERSION_MINOR, odoosd, "odo_osd", plugin_init, PACKAGE_VERSION,
+// gstreamer looks for this structure to register detection-libs
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR, GST_VERSION_MINOR, odoviz, "odo_viz", plugin_init, PACKAGE_VERSION,
                    GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

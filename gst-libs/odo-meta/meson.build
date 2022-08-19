@@ -27,5 +27,5 @@ gstodometa = library('odo-meta',
   c_args: plugin_c_args,
   dependencies : [gst_dep, gst_video_dep, gstbase_dep],
   install : true,
-  install_dir : plugins_install_dir,
+  install_dir : lib_install_dir,
 )

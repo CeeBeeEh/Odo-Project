@@ -20,8 +20,8 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __GST_ODOOSD_H__
-#define __GST_ODOOSD_H__
+#ifndef __GST_ODOVIZ_H__
+#define __GST_ODOVIZ_H__
 
 #include <gst/gst.h>
 #include <gst/video/gstvideofilter.h>
@@ -29,11 +29,11 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ODO_OSD (gst_odo_osd_get_type())
+#define GST_TYPE_ODO_VIZ (gst_odo_viz_get_type())
 
-G_DECLARE_FINAL_TYPE (GstOdoOsd, gst_odo_osd, GST, ODOOSD, GstVideoFilter)
+G_DECLARE_FINAL_TYPE (GstOdoViz, gst_odo_viz, GST, ODOVIZ, GstVideoFilter)
 
-struct _GstOdoOsd {
+struct _GstOdoViz {
     GstVideoFilter parent;
     gint width;
     gint height;
@@ -47,4 +47,4 @@ void DrawRectangles(guint8 *img, gint img_width, gint img_height, GstOdoMeta *od
 
 G_END_DECLS
 
-#endif /* __GST_ODOOSD_H__ */
+#endif /* __GST_ODOVIZ_H__ */

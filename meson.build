@@ -1,6 +1,7 @@
 project('gst-odo', 'cpp', version : '1.19.0.1', license : 'LGPL')
 
-plugins_install_dir = join_paths(meson.current_source_dir(), 'release')
+plugins_install_dir = join_paths(meson.current_source_dir(), 'release/gstreamer')
+lib_install_dir = join_paths(meson.current_source_dir(), 'release')
 
 cc = meson.get_compiler('cpp')
 
@@ -24,6 +25,6 @@ odo_meta_dep = declare_dependency(link_with : gstodometa)
 #odometa_dep = cc.find_library('odo-meta', dirs : plugins_install_dir)
 
 subdir('gst/odo-detector')
-subdir('gst/odo-osd')
+subdir('gst/odo-viz')
 
-subdir('plugins/odo-lib-opencv-yolo')
+subdir('detection-libs/odo-lib-opencv-yolo')

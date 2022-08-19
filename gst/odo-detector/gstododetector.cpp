@@ -399,6 +399,6 @@ static gboolean plugin_init(GstPlugin *ododetector) {
     return GST_ELEMENT_REGISTER (odo_detector, ododetector);
 }
 
-// gstreamer looks for this structure to register plugins
+// gstreamer looks for this structure to register detection-libs
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR, GST_VERSION_MINOR, ododetector, "odo_detector", plugin_init, PACKAGE_VERSION,
                    GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

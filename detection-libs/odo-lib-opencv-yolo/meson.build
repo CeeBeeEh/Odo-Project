@@ -8,5 +8,5 @@ odolib_yolo = library('odo-lib-opencv-yolo',
   c_args: plugin_c_args,
   dependencies : [opencv_dep],
   install : true,
-  install_dir : plugins_install_dir,
+  install_dir : lib_install_dir,
 )
