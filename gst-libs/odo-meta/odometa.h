@@ -8,6 +8,9 @@
 #include <gst/gst.h>
 #include <gst/gstmeta.h>
 #include <array>
+#include <opencv2/opencv.hpp>
+#include <opencv4/opencv2/core/mat.hpp>
+
 #include "../../include/DetectionData.h"
 
 G_BEGIN_DECLS
@@ -20,7 +23,10 @@ typedef struct _GstOdoMeta GstOdoMeta;
 struct _GstOdoMeta {
     GstMeta meta;
 
+    gint inferenceInterval;
+    gboolean isInferenceFrame;
     DetectionData *detections;
+    //cv::Mat frame;
     ulong detectionCount;
 };
 
@@ -30,7 +36,8 @@ const GstMetaInfo *gst_odo_meta_get_info(void);
 
 #define GST_ODO_META_GET(buf) ((GstOdoMeta *)gst_buffer_get_meta((buf), GST_ODO_META_API_TYPE))
 GstOdoMeta *gst_buffer_get_odo_meta (GstBuffer * buffer);
-GstOdoMeta *gst_odo_meta_add(GstBuffer *buffer, DetectionData *detections, ulong &detectCount);
+GstOdoMeta *gst_odo_meta_add(GstBuffer *buffer, DetectionData *detections, ulong &detectCount,
+                             gint inferenceInterval, gboolean isInferenceFrame);
 #define GST_ODO_META_ADD(buf) ((GstOdoMeta *)gst_buffer_add_meta(buf,gst_odo_meta_get_info(),(gpointer)NULL))
 
 G_END_DECLS

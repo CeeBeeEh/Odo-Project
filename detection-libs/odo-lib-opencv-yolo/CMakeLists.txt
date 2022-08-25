@@ -20,4 +20,3 @@ add_library(OdoLib_OpenCV_Yolo SHARED ${SOURCES})
 
 target_link_libraries(OdoLib_OpenCV_Yolo ${OpenCV_LIBS})
 target_link_libraries(OdoLib_OpenCV_Yolo ${GLIB_LDFLAGS})
-#target_link_libraries( OdoLib_OpenCV_Yolo PkgConfig::deps )

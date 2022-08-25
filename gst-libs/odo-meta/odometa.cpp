@@ -23,6 +23,8 @@ GType gst_odo_meta_api_get_type(void) {
 static gboolean gst_odo_meta_init(GstMeta *meta, gpointer params, GstBuffer *buffer) {
     auto *gst_odo_meta = (GstOdoMeta *)meta;
     gst_odo_meta->detectionCount = 0;
+    gst_odo_meta->inferenceInterval = 0;
+    gst_odo_meta->isInferenceFrame = false;
     return TRUE;
 }
 
@@ -49,11 +51,15 @@ static gboolean gst_odo_meta_transform(GstBuffer * dest_buf, GstMeta * meta,
 
     dest_meta->detections = src_meta->detections;
     dest_meta->detectionCount = src_meta->detectionCount;
+    dest_meta->isInferenceFrame = src_meta->isInferenceFrame;
+    dest_meta->inferenceInterval = src_meta->inferenceInterval;
 
     return TRUE;
 }
 
-void gst_odo_meta_free (GstMeta *meta, GstBuffer *buffer) {}
+void gst_odo_meta_free (GstMeta *meta, GstBuffer *buffer) {
+    free(meta);
+}
 
 GstOdoMeta *gst_buffer_get_odo_meta (GstBuffer * buffer) {
     gpointer state = NULL;
@@ -73,13 +79,16 @@ GstOdoMeta *gst_buffer_get_odo_meta (GstBuffer * buffer) {
     return odoMeta;
 }
 
-GstOdoMeta * gst_odo_meta_add (GstBuffer * buffer, DetectionData *detections, ulong &detectCount) {
+GstOdoMeta * gst_odo_meta_add (GstBuffer * buffer, DetectionData *detections, ulong &detectCount,
+                               gint inferenceInterval, gboolean isInferenceFrame) {
     GstOdoMeta *meta;
 
     meta = (GstOdoMeta *) gst_buffer_add_meta (buffer, GST_ODO_META_INFO, NULL);
 
     meta->detections = detections;
     meta->detectionCount = detectCount;
+    meta->isInferenceFrame = isInferenceFrame;
+    meta->inferenceInterval = inferenceInterval;
 
     return meta;
 }

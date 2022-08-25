@@ -12,7 +12,6 @@ find_library(GSTBASE gstbase-1.0)
 find_library(GOBJECT gobject-2.0)
 find_library(GLIB glib-2.0)
 
-
 message("Gstreamer package ${GSTREAMER}")
 message("Gstreamer video package ${GSTREAMER_VIDEO}")
 
@@ -30,4 +29,3 @@ add_library(gst-odo-viz SHARED ${SOURCE_FILES})
 
 target_link_libraries(gst-odo-viz ${GSTREAMER} ${GSTREAMER_VIDEO} ${CUDALIB} ${GSTBASE} ${GOBJECT} ${GLIB})
 target_link_libraries(gst-odo-viz m gstrtspserver-1.0)
-#target_link_libraries(gst-odo-detector "libOpenCV_Yolo.so")

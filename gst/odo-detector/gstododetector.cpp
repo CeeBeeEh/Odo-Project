@@ -42,32 +42,32 @@
 #include <utility>
 #include <vector>
 #include <cstdio>
+#include <opencv4/opencv2/core/types.hpp>
 
 #include "config.h"
 #include "gstododetector.h"
 #include "../../gst-libs/odo-meta/odometa.h"
-#include "../../include/DetectionData.h"
+#include "../../include/common.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_odo_detector_debug);
 #define GST_CAT_DEFAULT gst_odo_detector_debug
 
 void (*odo_load_ptr)(bool, float, float, int, int, const char*, const char*, const char*);
-void (*odo_detect_ptr)(ulong&, DetectionData*, guint8*, size_t, int, int);
+void (*odo_detect_ptr)(ulong&, DetectionData*, cv::Mat);
 void* handle = nullptr;
 const char* error_message = nullptr;
+
+gint INFERENCE_COUNT = 0;
 
 /* Filter signals and args */
 enum {
     // gstreamer signals
-    SIGNAL_ODO_CONFIDENCE,
-    SIGNAL_ODO_NMS,
-    SIGNAL_ODO_WIDTH,
-    SIGNAL_ODO_HEIGHT,
     LAST_SIGNAL
 };
 
 #define DEFAULT_PROP_WIDTH 	416
 #define DEFAULT_PROP_HEIGHT	416
+#define DEFAULT_PROP_INFERENCE_INTERVAL 15
 #define DEFAULT_PROP_CONFIDENCE_THRESHOLD	0.3
 #define DEFAULT_PROP_NMS_THRESHOLD	0.4
 #define DEFAULT_PROP_LIB_PATH       "libOdoLib_OpenCV_Yolo.so"
@@ -79,6 +79,7 @@ enum {
     PROP_0,
     PROP_WIDTH,
     PROP_HEIGHT,
+    PROP_INFERENCE_INTERVAL,
     PROP_CONFIDENCE_THRESHOLD,
     PROP_NMS_THRESHOLD,
     PROP_CUDA,
@@ -117,7 +118,7 @@ static gboolean gst_odo_detector_start(GstBaseTransform *btrans);
 
 static gboolean gst_odo_detector_stop(GstBaseTransform *btrans);
 
-static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter, GstVideoFrame *frame);
+static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter, GstVideoFrame *gstFrame);
 
 /* initialize the plugin's class */
 static void gst_odo_detector_class_init(GstOdoDetectorClass *klass) {
@@ -145,8 +146,16 @@ static void gst_odo_detector_class_init(GstOdoDetectorClass *klass) {
 
     g_object_class_install_property (gobject_class, PROP_HEIGHT,
                                      g_param_spec_int ("height", "model height",
-                                                        "Height of model input size", 32, 4096,
-                                                        DEFAULT_PROP_HEIGHT,
+                                                       "Height of model input size", 32, 4096,
+                                                       DEFAULT_PROP_HEIGHT,
+                                                       GParamFlags(G_PARAM_READABLE |
+                                                                   G_PARAM_WRITABLE |
+                                                                   G_PARAM_CONSTRUCT)));
+
+    g_object_class_install_property (gobject_class, PROP_INFERENCE_INTERVAL,
+                                     g_param_spec_int ("interval", "inference interval",
+                                                       "Height of model input size", 0, 255,
+                                                       DEFAULT_PROP_INFERENCE_INTERVAL,
                                                        GParamFlags(G_PARAM_READABLE |
                                                                    G_PARAM_WRITABLE |
                                                                    G_PARAM_CONSTRUCT)));
@@ -239,14 +248,15 @@ static void gst_odo_detector_init(GstOdoDetector *odo) {
 static gboolean gst_odo_detector_start(GstBaseTransform *base) {
     GstOdoDetector *odo = GST_ODODETECTOR (base);
 
-    fprintf(stdout, "Setting property PROP_WIDTH=%d\n", odo->width);
-    fprintf(stdout, "Setting property PROP_HEIGHT=%d\n", odo->height);
-    fprintf(stdout, "Setting property PROP_CONFIDENCE_THRESHOLD=%f\n", odo->confidence_threshold);
-    fprintf(stdout, "Setting property PROP_NMS_THRESHOLD=%f\n", odo->nms_threshold);
-    fprintf(stdout, "Setting property PROP_LIB_PATH=%s\n", odo->lib_path.c_str());
-    fprintf(stdout, "Setting property PROP_NET_CLASSES=%s\n", odo->net_classes.c_str());
-    fprintf(stdout, "Setting property PROP_NET_CONFIG=%s\n", odo->net_config.c_str());
-    fprintf(stdout, "Setting property PROP_NET_WEIGHTS=%s\n", odo->net_weights.c_str());
+    fprintf(stdout, "Setting property WIDTH=%d\n", odo->width);
+    fprintf(stdout, "Setting property HEIGHT=%d\n", odo->height);
+    fprintf(stdout, "Setting property INFERENCE_INTERVAL=%d\n", odo->inference_interval);
+    fprintf(stdout, "Setting property CONFIDENCE_THRESHOLD=%f\n", odo->confidence_threshold);
+    fprintf(stdout, "Setting property NMS_THRESHOLD=%f\n", odo->nms_threshold);
+    fprintf(stdout, "Setting property LIB_PATH=%s\n", odo->lib_path.c_str());
+    fprintf(stdout, "Setting property NET_CLASSES=%s\n", odo->net_classes.c_str());
+    fprintf(stdout, "Setting property NET_CONFIG=%s\n", odo->net_config.c_str());
+    fprintf(stdout, "Setting property NET_WEIGHTS=%s\n", odo->net_weights.c_str());
 
     // on error dlopen returns NULL
     GST_LOG_OBJECT (base, "Opening library");
@@ -262,7 +272,7 @@ static gboolean gst_odo_detector_start(GstBaseTransform *base) {
     GST_LOG_OBJECT (base, "Linking function pointers");
     odo_load_ptr = (void (*)(bool, float, float, int, int, const char*, const char*, const char*))
             dlsym( handle, "c_odo_load" );
-    odo_detect_ptr = (void (*)(ulong&, DetectionData*, guint8*, size_t, int, int)) dlsym(handle, "c_odo_detect" );
+    odo_detect_ptr = (void (*)(ulong&, DetectionData*, cv::Mat)) dlsym(handle, "c_odo_detect" );
     GST_LOG_OBJECT (base, "Function pointers successfully linked");
 
     fprintf(stdout, "Network params width=%d height=%d\n", odo->width, odo->height);
@@ -284,6 +294,9 @@ static void gst_odo_detector_set_property(GObject *object, guint prop_id, const 
             break;
         case PROP_HEIGHT:
             filter->height = g_value_get_int(value);
+            break;
+        case PROP_INFERENCE_INTERVAL:
+            filter->inference_interval = g_value_get_int(value);
             break;
         case PROP_CONFIDENCE_THRESHOLD:
             filter->confidence_threshold = g_value_get_float(value);
@@ -327,6 +340,9 @@ static void gst_odo_detector_get_property(GObject *object, guint prop_id, GValue
         case PROP_HEIGHT:
             g_value_set_int(value, filter->height);
             break;
+        case PROP_INFERENCE_INTERVAL:
+            g_value_set_int(value, filter->inference_interval);
+            break;
         case PROP_CONFIDENCE_THRESHOLD:
             g_value_set_double(value, filter->confidence_threshold);
             break;
@@ -360,7 +376,7 @@ static void gst_odo_detector_get_property(GObject *object, guint prop_id, GValue
 /* GstVideoFilter method implementations */
 
 // this function does the actual processing
-static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter, GstVideoFrame *frame) {
+static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter, GstVideoFrame *gstFrame) {
     GstOdoDetector *filter = GST_ODODETECTOR(vfilter);
 
     GST_LOG_OBJECT (vfilter, "Transforming in-place");
@@ -368,25 +384,44 @@ static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter
 /*    if (GST_CLOCK_TIME_IS_VALID (GST_BUFFER_TIMESTAMP(outbuf)))
         gst_object_sync_values(GST_OBJECT (filter), GST_BUFFER_TIMESTAMP (outbuf));*/
 
-    GstBuffer *buffer = gst_buffer_copy_deep(frame->buffer);
-    GstMapInfo map;
-    gst_buffer_map(buffer, &map, GST_MAP_WRITE);
-    auto* img = map.data;
-    auto img_width = GST_VIDEO_FRAME_WIDTH (frame);
-    auto img_height = GST_VIDEO_FRAME_HEIGHT (frame);
-    auto img_format = GST_VIDEO_FRAME_FORMAT (frame);
+    try {
+        GstOdoMeta *meta;
+        gstFrame->buffer = gst_buffer_make_writable (gstFrame->buffer);
+        meta = GST_ODO_META_ADD(gstFrame->buffer);
+        meta->inferenceInterval = filter->inference_interval;  // is this needed?
 
-    ulong detectCount = 0;
+        static DetectionData detectData[DETECTION_MAX] = {};
+        ulong detectCount = 0;
 
-    static DetectionData detectData[255];
+        GstBuffer *buffer = gst_buffer_copy_deep(gstFrame->buffer);
+        GstMapInfo map;
+        gst_buffer_map(buffer, &map, GST_MAP_WRITE);
 
-    (*odo_detect_ptr)(detectCount, detectData, img, img_format, img_width, img_height);
 
-    GstOdoMeta *meta;
-    frame->buffer = gst_buffer_make_writable (frame->buffer);
-    meta = GST_ODO_META_ADD(frame->buffer);
-    meta->detections = detectData;
-    meta->detectionCount = detectCount;
+        cv::Mat frame = cv::Mat(cv::Size(GST_VIDEO_FRAME_WIDTH (gstFrame),
+                                       GST_VIDEO_FRAME_HEIGHT (gstFrame)),
+                              GST_VIDEO_FRAME_FORMAT (gstFrame),
+                              map.data);
+
+        if (INFERENCE_COUNT == 0) {
+            meta->isInferenceFrame = true;
+            (*odo_detect_ptr)(detectCount, detectData, frame);
+        }
+        else {
+            meta->isInferenceFrame = false;
+        }
+
+        meta->detections = detectData;
+        meta->detectionCount = detectCount;
+
+        if (INFERENCE_COUNT >= filter->inference_interval)
+            INFERENCE_COUNT = 0;
+        else
+            INFERENCE_COUNT++;
+    }
+    catch (const std::exception &e) {
+        GST_ERROR ("Error with detection, %s", e.what());
+    }
 
     return GST_FLOW_OK;
 }

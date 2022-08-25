@@ -25,7 +25,7 @@ gstodometa_sources = [
 gstodometa = library('odo-meta',
   gstodometa_sources,
   c_args: plugin_c_args,
-  dependencies : [gst_dep, gst_video_dep, gstbase_dep],
+  dependencies : [gst_dep, gst_video_dep, gstbase_dep, opencv_dep],
   install : true,
   install_dir : lib_install_dir,
 )

@@ -20,34 +20,41 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __GST_ODODETECTOR_H__
-#define __GST_ODODETECTOR_H__
+#ifndef __GST_ODOTRACK_H__
+#define __GST_ODOTRACK_H__
 
 #include <gst/gst.h>
 #include <gst/video/gstvideofilter.h>
 #include <string>
+#include <opencv2/opencv.hpp>
+#include <opencv2/tracking.hpp>
+#include <opencv2/tracking/tracking_legacy.hpp>
+
+#include "../../include/DetectionData.h"
+#include "../../include/common.h"
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ODODETECTOR (gst_odo_detector_get_type())
+#define GST_TYPE_ODOTRACK (gst_odo_track_get_type())
 
-G_DECLARE_FINAL_TYPE (GstOdoDetector, gst_odo_detector, GST, ODODETECTOR, GstVideoFilter)
+G_DECLARE_FINAL_TYPE (GstOdoTrack, gst_odo_track, GST, ODOTRACK, GstVideoFilter)
 
-struct _GstOdoDetector {
+typedef enum {
+    GST_OPENCV_TRACKER_ALGORITHM_BOOSTING,
+    GST_OPENCV_TRACKER_ALGORITHM_CSRT,
+    GST_OPENCV_TRACKER_ALGORITHM_KCF,
+    GST_OPENCV_TRACKER_ALGORITHM_MEDIANFLOW,
+    GST_OPENCV_TRACKER_ALGORITHM_MIL,
+    GST_OPENCV_TRACKER_ALGORITHM_MOSSE,
+    GST_OPENCV_TRACKER_ALGORITHM_TLD,
+} GstOpenCVTrackerAlgorithm;
+
+struct _GstOdoTrack {
     GstVideoFilter parent;
-    gint width;
-    gint height;
-    gint inference_interval;
-    gfloat confidence_threshold;
-    gfloat nms_threshold;
-    gboolean cuda;
-    std::string lib_path;
-    std::string net_classes;
-    std::string net_config;
-    std::string net_weights;
+    gint tracker_type;
     gboolean silent;
 };
 
 G_END_DECLS
 
-#endif /* __GST_ODODETECTOR_H__ */
+#endif /* __GST_ODOTRACK_H__ */

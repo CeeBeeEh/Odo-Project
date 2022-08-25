@@ -78,19 +78,17 @@ void odo_free() {
     // nothing to do here
 }
 
-extern "C" void c_odo_detect(ulong &num, DetectionData *detectData, unsigned char *img,
-                             size_t img_format, int img_width, int img_height) {
-    return odo_detect(num, detectData, img, img_format, img_width, img_height);
+extern "C" void c_odo_detect(ulong &num, DetectionData *detectData, cv::Mat frame) {
+    return odo_detect(num, detectData, frame);
 }
 
-void odo_detect(ulong &num, DetectionData *detectData, unsigned char *img,
-                size_t img_format, int img_width, int img_height) {
-    cv::Mat frame, fixed, blob;
+void odo_detect(ulong &num, DetectionData *detectData, cv::Mat frame) {
+    cv::Mat fixed, blob;
     std::vector<cv::Mat> detections;
     int imgType = CV_8UC3;
     bool rbSwap = false;
 
-    switch (img_format) {
+/*    switch (img_format) {
         case 11:
             rbSwap = true;
             imgType = CV_8UC4;
@@ -109,25 +107,15 @@ void odo_detect(ulong &num, DetectionData *detectData, unsigned char *img,
             fprintf(stderr, "LIB: Unsupported image format\n");
             num = -1;
             return;
-    }
+    }*/
 
-    if (img == nullptr) {
+    if (frame.data == nullptr) {
         fprintf(stderr, "LIB: Image is null\n");
         num = -1;
         return;
     }
 
     try {
-        //auto start = std::chrono::high_resolution_clock::now();
-        try {
-            frame = cv::Mat(cv::Size(img_width, img_height), imgType, img);
-        }
-        catch (cv::Exception &e) {
-            fprintf(stderr, "LIB: Error in forward pass: %s\n", e.what());
-            num = -1;
-            return;
-        }
-
         std::vector<int> classIds;
         std::vector<float> scores;
         std::vector<cv::Rect> boxes;
@@ -140,7 +128,12 @@ void odo_detect(ulong &num, DetectionData *detectData, unsigned char *img,
             auto box = boxes[i];
             auto classId = classIds[i];
             DetectionData detection;
-            detection.box = xyToBox(box.x, box.y, box.width, box.height);
+            //detection.box = (RoiBox){box.x, box.y, box.width, box.height};
+            detection.box.x = box.x;
+            detection.box.y = box.y;
+            detection.box.width = box.width;
+            detection.box.height = box.height;
+            //detection.box = xyToBox(box.x, box.y, box.width, box.height);
             strcpy(detection.label, CLASS_LIST.at(classId).c_str());
             detection.class_id = classId;
             detection.confidence = scores[i];

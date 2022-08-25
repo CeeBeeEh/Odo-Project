@@ -21,10 +21,11 @@ gstbase_dep = dependency('gstreamer-base-1.0', version : '>=1.19',
 # build odo-meta first
 subdir('gst-libs/odo-meta')
 
+# then declare odo-meta as a dependency
 odo_meta_dep = declare_dependency(link_with : gstodometa)
-#odometa_dep = cc.find_library('odo-meta', dirs : plugins_install_dir)
 
 subdir('gst/odo-detector')
 subdir('gst/odo-viz')
+subdir('gst/odo-track')
 
 subdir('detection-libs/odo-lib-opencv-yolo')

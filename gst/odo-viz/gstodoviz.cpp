@@ -285,15 +285,13 @@ static GstFlowReturn gst_odo_viz_transform_ip(GstVideoFilter *vfilter, GstVideoF
     GST_LOG_OBJECT (vfilter, "Transforming in-place");
 
     GstOdoMeta *meta = gst_buffer_get_odo_meta(frame->buffer);
-
     GstMapInfo map;
     gst_buffer_map(frame->buffer, &map, GST_MAP_WRITE);
     auto* img = map.data;
-    auto img_width = GST_VIDEO_FRAME_WIDTH (frame);
-    auto img_height = GST_VIDEO_FRAME_HEIGHT (frame);
     auto img_format = GST_VIDEO_FRAME_FORMAT (frame);
 
-    DrawRectangles(img, img_width, img_height, meta);
+    DrawRectangles(img, GST_VIDEO_FRAME_WIDTH (frame),
+                   GST_VIDEO_FRAME_HEIGHT (frame), meta);
 
     map.data = img;
 
@@ -314,7 +312,11 @@ void DrawRectangles(guint8 *img, gint img_width, gint img_height, GstOdoMeta *od
 
     for (ulong i=0; i<odoMeta->detectionCount; i++) {
         try {
+//            GST_ERROR("Count=%lu", i);
             DetectionData detection = odoMeta->detections[i];
+/*            GST_ERROR("label=%s, x=%d, y=%d, w=%d, h=%d", detection.label,
+                      detection.box.x, detection.box.y,
+                      detection.box.width, detection.box.height);*/
             gint lineDefault = 2;
             cv::Scalar white = cv::Scalar(255,255,255);
             cv::Scalar colourDefault = cv::Scalar(200,170,125);
@@ -326,8 +328,8 @@ void DrawRectangles(guint8 *img, gint img_width, gint img_height, GstOdoMeta *od
             dbgText.append("_" + numToStr(round( detection.confidence * 100.0 ) / 100.0));
 
             // [0] is x, [1] is y
-            cv::Rect detectionRect = cv::Rect(detection.box.top_left[0],
-                                              detection.box.top_left[1],
+            cv::Rect detectionRect = cv::Rect(detection.box.x,
+                                              detection.box.y,
                                               detection.box.width,
                                               detection.box.height);
             //cv::Point topLeft = {odoMeta->detections[i].box.top_left[0], odoMeta->detections[i].box.top_left[1]};
@@ -341,14 +343,14 @@ void DrawRectangles(guint8 *img, gint img_width, gint img_height, GstOdoMeta *od
             cv::Size textSize = cv::getTextSize(dbgText, font, fontScale,
                                                 lineDefault, nullptr);
 
-            cv::Rect textRect = cv::Rect(detection.box.top_left[0] +10,
-                                         detection.box.top_left[1] +26,
+            cv::Rect textRect = cv::Rect(detection.box.x +10,
+                                         detection.box.y +26,
                                          detection.box.width +20,
                                          detection.box.height +20);
-            cv::Point leftRect = cv::Point(detection.box.top_left[0],
-                                           detection.box.bottom_right[1]);
-            cv::Point leftText = cv::Point(detection.box.top_left[0],
-                                           detection.box.bottom_right[1] + 15);
+            cv::Point leftRect = cv::Point(detection.box.x,
+                                           detection.box.y + detection.box.height);
+            cv::Point leftText = cv::Point(detection.box.x,
+                                           detection.box.y + detection.box.height + 15);
 
             cv::Point textPoint = cv::Point(leftRect.x + textSize.width + 20,
                                             leftRect.y + textSize.height + 20);
@@ -357,7 +359,7 @@ void DrawRectangles(guint8 *img, gint img_width, gint img_height, GstOdoMeta *od
                         1,cv::LINE_4, false);
         }
         catch (std::exception &e) {
-            fprintf (stderr, "Error with DrawRectangles: %s", e.what());
+            GST_ERROR("Error with DrawRectangles: %s", e.what());
         }
     }
 }
