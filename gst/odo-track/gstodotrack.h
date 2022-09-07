@@ -55,6 +55,13 @@ struct _GstOdoTrack {
     gboolean silent;
 };
 
+typedef struct TrackItem {
+    cv::Mat crop;
+    std::vector<cv::KeyPoint> keypoints;
+    cv::Mat descriptor;
+    DetectionData detection;
+} TrackItem;
+
 G_END_DECLS
 
 #endif /* __GST_ODOTRACK_H__ */

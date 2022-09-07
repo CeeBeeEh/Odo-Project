@@ -2,6 +2,8 @@
 // Created by chris on 2022-08-17.
 //
 
+#pragma once
+
 #ifndef ODO_DETECTIONDATA_H
 #define ODO_DETECTIONDATA_H
 
@@ -24,7 +26,7 @@ struct DetectionData {
     int16_t inference_hits = 0;
     double confidence = 0;
     RoiBox box;
-//    std::chrono::system_clock::time_point detection_time;
+    long detection_time;    // in milliseconds
 };
 
 #endif //ODO_DETECTIONDATA_H

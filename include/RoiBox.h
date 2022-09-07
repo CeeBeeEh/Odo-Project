@@ -2,6 +2,8 @@
 // Created by chris on 2022-08-17.
 //
 
+#pragma once
+
 #ifndef ODO_ROIBOX_H
 #define ODO_ROIBOX_H
 

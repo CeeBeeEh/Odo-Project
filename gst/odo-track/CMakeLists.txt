@@ -5,9 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
+
 find_library(GSTREAMER gstreamer-1.0)
 find_library(GSTREAMER_VIDEO gstvideo-1.0)
-
 find_library(GSTBASE gstbase-1.0)
 find_library(GOBJECT gobject-2.0)
 find_library(GLIB glib-2.0)

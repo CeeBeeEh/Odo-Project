@@ -1,7 +1,7 @@
 /*
  * GStreamer
  * Copyright (C) 2006 Stefan Kost <ensonic@users.sf.net>
- * Copyright (C) YEAR AUTHOR_NAME AUTHOR_EMAIL
+ * Copyright (C) 2022 Chris Blasko <cblasko@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,6 +19,15 @@
  * Boston, MA 02111-1307, USA.
  */
 
+/*
+ * Currently this tracking module does not properly track an object
+ * across inference frames. It only maintains tracking info between
+ * each inference. Additionally, this currently implementation is
+ * incredibly slow and frankly does not work.
+ *
+ * There's a lot of room for improvement.
+ */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -28,12 +37,11 @@
 #include <dlfcn.h>
 #include <utility>
 #include <vector>
-#include <cstdio>
 
 #include "config.h"
 #include "gstodotrack.h"
+#include <opencv2/xfeatures2d.hpp>
 #include "../../gst-libs/odo-meta/odometa.h"
-//#include "../../include/common.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_odo_track_debug);
 #define GST_CAT_DEFAULT gst_odo_track_debug
@@ -44,7 +52,8 @@ enum {
     LAST_SIGNAL
 };
 
-#define DEFAULT_PROP_TRACKER_TYPE       "BOOSTING"
+#define DEFAULT_IMG_DIVISOR 2
+#define DEFAULT_MIN_HESSIAN 400
 #define GST_OPENCV_TRACKER_ALGORITHM (tracker_algorithm_get_type ())
 
 enum {
@@ -53,9 +62,16 @@ enum {
     PROP_SILENT,
 };
 
-cv::Ptr<cv::legacy::MultiTracker> TRACKER;
+// ************** Tracking objects **************
+std::vector<TrackItem> TRACKED;
+cv::Ptr<cv::xfeatures2d::SURF> SURF;
+cv::Ptr<cv::DescriptorMatcher> FLANN;
 ulong LAST_COUNT = 0;
 DetectionData LAST_DETECTION[DETECTION_MAX] = {};
+int IMG_DIVISOR = DEFAULT_IMG_DIVISOR;
+int MIN_HESSIAN = DEFAULT_MIN_HESSIAN;
+uint64_t TRACK_IDX = 0;
+// **********************************************
 
 // the capabilities of the inputs and outputs.
 static GstStaticPadTemplate sink_template =
@@ -203,7 +219,8 @@ static cv::Ptr<cv::legacy::Tracker> create_cvtracker(GstOdoTrack *odo) {
  */
 static gboolean gst_odo_track_start(GstBaseTransform *base) {
     //GstOdoTrack *odo = GST_ODOTRACK (base);
-    TRACKER = cv::legacy::MultiTracker::create();
+    SURF = cv::xfeatures2d::SURF::create(MIN_HESSIAN);
+    FLANN = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
     return TRUE;
 }
 
@@ -265,39 +282,122 @@ static GstFlowReturn gst_odo_track_transform_frame_ip(GstVideoFilter *vfilter, G
     auto img_width = GST_VIDEO_FRAME_WIDTH (frame);
     auto img_height = GST_VIDEO_FRAME_HEIGHT (frame);
 
+    // grab image from buffer as a cv::Mat
     cv::Mat img = cv::Mat(cv::Size(img_width, img_height), CV_8UC3, map.data);
 
-    if (meta->isInferenceFrame) {
-        LAST_COUNT = meta->detectionCount;
-        TRACKER->clear();
-        TRACKER = cv::legacy::MultiTracker::create();
-        for (int i=0; i<LAST_COUNT; i++) {
-            LAST_DETECTION[i].class_id = meta->detections[i].class_id;
-            LAST_DETECTION[i].confidence = meta->detections[i].confidence;
-            strcpy(LAST_DETECTION[i].label, meta->detections[i].label);
-            cv::Rect2i rect = cv::Rect2i(meta->detections[i].box.x, meta->detections[i].box.y,
-                                         meta->detections[i].box.width, meta->detections[i].box.height);
-            TRACKER->add(create_cvtracker(odo), img, rect);
+    // create an 8bit greyscale image to use for tracking
+    cv::Mat grey;
+    cv::cvtColor(img, grey, cv::COLOR_BGR2GRAY);
+    cv::resize(grey, grey,cv::Size(grey.cols / IMG_DIVISOR, grey.rows / IMG_DIVISOR));
+
+    try {
+        if (meta->isInferenceFrame) {
+            LAST_COUNT = meta->detectionCount;
+
+            // reset tracking data on new inference frame
+            if (!TRACKED.empty()) {
+                for (auto item : TRACKED) {
+                    item.crop.release();
+                    item.descriptor.release();
+                }
+                TRACKED.clear();
+            }
+
+            for (int i=0; i<LAST_COUNT; i++) {
+                LAST_DETECTION[i].class_id = meta->detections[i].class_id;
+                LAST_DETECTION[i].confidence = meta->detections[i].confidence;
+                strcpy(LAST_DETECTION[i].label, meta->detections[i].label);
+                TrackItem item;
+                item.detection = meta->detections[i];
+                item.detection.box.x /= IMG_DIVISOR ;
+                item.detection.box.y /= IMG_DIVISOR ;
+                item.detection.box.width /= IMG_DIVISOR ;
+                item.detection.box.height /= IMG_DIVISOR ;
+                cv::Rect2i rect = cv::Rect2i(item.detection.box.x,item.detection.box.y,
+                                             item.detection.box.width,item.detection.box.height);
+                item.detection.track_id = TRACK_IDX++;
+
+                /*
+                 * Getting the points from a crop instead of the entire image with a mask
+                 * seems to be much faster. However, unsure about accuracy.
+                 */
+                item.crop = grey(rect);
+                SURF->detectAndCompute(item.crop,cv::noArray(),item.keypoints,item.descriptor);
+
+                /*cv::Mat mask = cv::Mat::zeros(grey.size(), CV_8UC1);
+                cv::Mat roi(mask, rect);
+                roi = cv::Scalar(255, 255, 255);
+                SURF->detectAndCompute(grey,mask,item.keypoints,item.descriptor); */
+
+                TRACKED.push_back(item);
+            }
         }
-        GST_DEBUG("Added %zu objects to tracker", LAST_COUNT);
+        else {
+            meta->detectionCount = LAST_COUNT;
+
+            std::vector<cv::KeyPoint> trackPoints;
+            cv::Mat trackDescriptor;
+            SURF->detectAndCompute(grey,cv::noArray(),trackPoints,trackDescriptor);
+
+            for (int j=0; j<TRACKED.size(); j++) {
+                auto last = TRACKED[j];
+
+                std::vector<cv::DMatch> goodMatches;
+                std::vector<std::vector<cv::DMatch>> knn_matches;
+
+                // FIXME: are these really needed?
+                goodMatches.clear();
+                knn_matches.clear();
+
+                FLANN->knnMatch(last.descriptor,
+                                trackDescriptor,
+                                knn_matches, 2 );
+
+                const float ratio_thresh = 0.7f;
+                for (auto & kmatch : knn_matches) {
+                    if (kmatch[0].distance < ratio_thresh * kmatch[1].distance) {
+                        goodMatches.push_back(kmatch[0]);
+                    }
+                }
+
+                std::vector<float> x,y;
+
+                // skip this object if no good points found in new frame
+                // could probably save previous tracking info for next frame
+                // to potentially reacquire tracking
+                if (knn_matches.empty() || goodMatches.empty()) continue;
+
+                // FIXME: this logic seems broken
+                for (auto & gMatch : goodMatches) {
+                    int idx = gMatch.trainIdx;
+                    x.push_back(trackPoints[idx].pt.x);
+                    y.push_back(trackPoints[idx].pt.y);
+                }
+
+                std::sort(x.begin(), x.end());
+                std::sort(y.begin(), y.end());
+
+                RoiBox box;
+                box.x = x.front();
+                box.y = y.front();
+                box.width = x.back();
+                box.height = y.back();
+
+                if (box.x < 0) box.x = 0;
+                if (box.y < 0) box.y = 0;
+                if (box.width > grey.cols - box.x) box.width = grey.cols - box.x;
+                if (box.height > grey.rows - box.y) box.height = grey.rows - box.y;
+
+                last.detection.box.x = box.x * IMG_DIVISOR;
+                last.detection.box.y = box.y * IMG_DIVISOR;
+                last.detection.box.width = box.width * IMG_DIVISOR;
+                last.detection.box.height = box.height * IMG_DIVISOR;
+                meta->detections[j] = last.detection;
+            }
+        }
     }
-    else {
-        meta->detectionCount = LAST_COUNT;
-
-        std::vector<cv::Rect2d> tracked;
-        if (!TRACKER->update(img, tracked)) GST_ERROR("Error tracking objects");
-
-        GST_DEBUG("Infer count=%lu, tracked count=%zu", LAST_COUNT, tracked.size());
-
-        for (int i=0; i<tracked.size(); i++) {
-            meta->detections[i].box.x = tracked[i].x;
-            meta->detections[i].box.y = tracked[i].y;
-            meta->detections[i].box.width = tracked[i].width;
-            meta->detections[i].box.height = tracked[i].height;
-            meta->detections[i].class_id = LAST_DETECTION[i].class_id;
-            meta->detections[i].confidence = LAST_DETECTION[i].confidence;
-            strcpy(meta->detections[i].label, LAST_DETECTION[i].label);
-        }
+    catch (cv::Exception &e) {
+        GST_ERROR("Tracking error=%s", e.what());
     }
 
     return GST_FLOW_OK;

@@ -385,6 +385,8 @@ static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter
         gst_object_sync_values(GST_OBJECT (filter), GST_BUFFER_TIMESTAMP (outbuf));*/
 
     try {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
         GstOdoMeta *meta;
         gstFrame->buffer = gst_buffer_make_writable (gstFrame->buffer);
         meta = GST_ODO_META_ADD(gstFrame->buffer);
@@ -418,6 +420,18 @@ static GstFlowReturn gst_odo_detector_transform_frame_ip(GstVideoFilter *vfilter
             INFERENCE_COUNT = 0;
         else
             INFERENCE_COUNT++;
+
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+        if (meta->isInferenceFrame) {
+            auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+            GST_DEBUG("Detection time %ld ms", time);
+
+            for (int i=0; i<detectCount; i++) {
+                meta->detections[i].detection_time = time;
+            }
+        }
+
     }
     catch (const std::exception &e) {
         GST_ERROR ("Error with detection, %s", e.what());
